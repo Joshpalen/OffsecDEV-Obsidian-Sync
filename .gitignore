@@ -1,0 +1,21 @@
+# Logs
+logs/
+*.log
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editors/IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Node/JS (if any)
+node_modules/
+
+# dotnet (if any)
+bin/
+obj/
+
