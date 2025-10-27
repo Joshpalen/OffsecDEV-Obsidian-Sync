@@ -37,11 +37,17 @@
     [switch]$PropagateDeletes,
 
     [Parameter(Mandatory=$false)]
-    [string]$LogDirectory = "${PSScriptRoot}\logs"
+    [string]$LogDirectory
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Determine script root for logging defaults even when PSScriptRoot is empty
+$scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
+if (-not $LogDirectory -or [string]::IsNullOrWhiteSpace($LogDirectory)) {
+    $LogDirectory = Join-Path $scriptRoot 'logs'
+}
 
 function Write-Section {
     param([string]$Text)
@@ -72,7 +78,8 @@ function Invoke-RoboCopySafe {
     )
 
     $args = @()
-    $args += @('"' + $Source + '"', '"' + $Destination + '"')
+    # Pass paths as raw strings; PowerShell handles quoting for spaces when invoking external commands
+    $args += @($Source, $Destination)
 
     # Copy options
     if ($Mirror) {
@@ -100,7 +107,9 @@ function Invoke-RoboCopySafe {
     $logFile = New-LogFile
     $args += "/LOG:$logFile"
 
-    Write-Host "robocopy $($args -join ' ')" -ForegroundColor DarkGray
+    # Display-friendly command string
+    $dispArgs = $args | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
+    Write-Host "robocopy $($dispArgs -join ' ')" -ForegroundColor DarkGray
 
     & robocopy @args | Write-Host
     $rc = $LASTEXITCODE
@@ -134,18 +143,18 @@ switch ($Direction) {
     'RootToCloud' {
         $mirror = $PropagateDeletes.IsPresent
         Write-Host "1) Root -> Cloud $(if($mirror){'(mirror with deletions)'}else{'(no deletions)'})"
-        Invoke-RoboCopySafe -Source $RootPath -Destination $CloudPath -Mirror:$mirror
+        $null = Invoke-RoboCopySafe -Source $RootPath -Destination $CloudPath -Mirror:$mirror
     }
     'CloudToRoot' {
         $mirror = $PropagateDeletes.IsPresent
         Write-Host "1) Cloud -> Root $(if($mirror){'(mirror with deletions)'}else{'(no deletions)'})"
-        Invoke-RoboCopySafe -Source $CloudPath -Destination $RootPath -Mirror:$mirror
+        $null = Invoke-RoboCopySafe -Source $CloudPath -Destination $RootPath -Mirror:$mirror
     }
     'Bidirectional' {
         Write-Host '1) Root -> Cloud (no deletions, newer-wins)'
-        Invoke-RoboCopySafe -Source $RootPath -Destination $CloudPath -Mirror:$false
+        $null = Invoke-RoboCopySafe -Source $RootPath -Destination $CloudPath -Mirror:$false
         Write-Host '2) Cloud -> Root (no deletions, newer-wins)'
-        Invoke-RoboCopySafe -Source $CloudPath -Destination $RootPath -Mirror:$false
+        $null = Invoke-RoboCopySafe -Source $CloudPath -Destination $RootPath -Mirror:$false
     }
 }
 
